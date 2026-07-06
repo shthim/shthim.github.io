@@ -1,15 +1,14 @@
 /**
  * 酒狐・Shukko — 个人主页（极简 SPA 版）
- * 半圆导航 · 滑动切页 · 音乐播放器 · 画廊
+ * 半圆旋转导航 · 淡入淡出切页 · 音乐播放器 · 画廊
  */
 
 'use strict';
 
 // =============================================
-// 1. 页面导航 + 滑动切页
+// 1. 导航 + 淡入淡出切页
 // =============================================
 (() => {
-  const track = document.getElementById('pagesTrack');
   const pages = document.querySelectorAll('.page');
   const navBtns = document.querySelectorAll('.nav-btn');
   const sideNav = document.getElementById('sideNav');
@@ -20,11 +19,8 @@
 
   let currentPage = 0;
   let isAnimating = false;
-  let touchStartX = 0;
-  let touchDeltaX = 0;
-  let isDragging = false;
 
-  // ---------- 切换到指定页 ----------
+  // ---------- 切换到指定页（淡入淡出） ----------
   function goToPage(index) {
     if (isAnimating) return;
     if (index < 0) index = 0;
@@ -32,10 +28,21 @@
     if (index === currentPage) return;
 
     isAnimating = true;
-    currentPage = index;
 
-    // 滑动轨道
-    track.style.transform = `translateX(-${currentPage * 100}%)`;
+    // 淡出当前页
+    const oldPage = pages[currentPage];
+    oldPage.classList.remove('active');
+
+    // 切换到新页
+    currentPage = index;
+    const newPage = pages[currentPage];
+    // 用 requestAnimationFrame 确保浏览器渲染了旧页的 opacity:0 再显示新页
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        newPage.classList.add('active');
+        isAnimating = false;
+      });
+    });
 
     // 更新导航按钮状态
     navBtns.forEach((btn, i) => {
@@ -47,15 +54,8 @@
       dot.classList.toggle('active', i === currentPage);
     });
 
-    // 自动关闭导航（小屏幕体验更好）
-    if (window.innerWidth <= 768) {
-      sideNav.classList.remove('open');
-      toggleIcon.textContent = '☰';
-    }
-
-    setTimeout(() => {
-      isAnimating = false;
-    }, 380); // 略大于 CSS transition 时长
+    // 切换菜单图标：导航展开时显示 ✕，收起时显示 ☰
+    // 但切页时不自动收回导航
   }
 
   // ---------- Nav 按钮点击 ----------
@@ -72,11 +72,11 @@
 
   // ---------- Nav 切换按钮 ----------
   navToggle.addEventListener('click', () => {
-    sideNav.classList.toggle('open');
-    toggleIcon.textContent = sideNav.classList.contains('open') ? '✕' : '☰';
+    const isOpen = sideNav.classList.toggle('open');
+    toggleIcon.textContent = isOpen ? '✕' : '☰';
   });
 
-  // 点击导航外部关闭
+  // 点击导航外部或页面内容时关闭
   document.addEventListener('click', (e) => {
     if (!sideNav.contains(e.target) && sideNav.classList.contains('open')) {
       sideNav.classList.remove('open');
@@ -94,6 +94,9 @@
 
   // ---------- 键盘导航 ----------
   document.addEventListener('keydown', (e) => {
+    // 如果 lightbox 开着，不处理翻页
+    if (document.getElementById('lightbox')?.classList.contains('show')) return;
+
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
       goToPage(currentPage + 1);
@@ -101,79 +104,25 @@
       e.preventDefault();
       goToPage(currentPage - 1);
     }
-  });
 
-  // ---------- 触屏滑动 ----------
-  const wrapper = document.getElementById('pagesWrapper');
-
-  wrapper.addEventListener('touchstart', (e) => {
-    touchStartX = e.changedTouches[0].screenX;
-    isDragging = true;
-    touchDeltaX = 0;
-  }, { passive: true });
-
-  wrapper.addEventListener('touchmove', (e) => {
-    if (!isDragging) return;
-    // 不阻止默认，保持页面内滚动正常工作
-    touchDeltaX = e.changedTouches[0].screenX - touchStartX;
-  }, { passive: true });
-
-  wrapper.addEventListener('touchend', (e) => {
-    if (!isDragging) return;
-    isDragging = false;
-
-    // 阈值：滑动超过 60px 才翻页
-    if (Math.abs(touchDeltaX) > 60) {
-      if (touchDeltaX < 0) {
-        goToPage(currentPage + 1);  // 左滑 → 下一页
-      } else {
-        goToPage(currentPage - 1);  // 右滑 → 上一页
-      }
+    // Escape 关闭导航
+    if (e.key === 'Escape' && sideNav.classList.contains('open')) {
+      sideNav.classList.remove('open');
+      toggleIcon.textContent = '☰';
     }
-  }, { passive: true });
-
-  // ---------- 鼠标滑动（拖拽翻页） ----------
-  let mouseStartX = 0;
-  let mouseDeltaX = 0;
-  let isMouseDown = false;
-
-  wrapper.addEventListener('mousedown', (e) => {
-    mouseStartX = e.screenX;
-    isMouseDown = true;
-    mouseDeltaX = 0;
-  });
-
-  wrapper.addEventListener('mousemove', (e) => {
-    if (!isMouseDown) return;
-    mouseDeltaX = e.screenX - mouseStartX;
-  });
-
-  wrapper.addEventListener('mouseup', (e) => {
-    if (!isMouseDown) return;
-    isMouseDown = false;
-
-    if (Math.abs(mouseDeltaX) > 80) {
-      if (mouseDeltaX < 0) {
-        goToPage(currentPage + 1);
-      } else {
-        goToPage(currentPage - 1);
-      }
-    }
-  });
-
-  wrapper.addEventListener('mouseleave', () => {
-    isMouseDown = false;
   });
 
   // ---------- 初始化 ----------
-  // 确保首页正确显示
-  track.style.transform = 'translateX(0)';
+  // 确保首页是唯一激活的
+  pages.forEach((p, i) => {
+    p.classList.toggle('active', i === 0);
+  });
   navBtns[0]?.classList.add('active');
 
   // 暴露接口
   window.ShukkoNavigator = { goToPage, getCurrentPage: () => currentPage };
 
-  console.log('🦊 酒狐小屋 — SPA 导航已启动');
+  console.log('🦊 酒狐小屋 — 导航已启动');
 })();
 
 // =============================================
@@ -375,7 +324,7 @@
     if (!galleryGrid) return;
     if (images.length === 0) return;
     galleryGrid.innerHTML = '';
-    images.forEach((img, idx) => {
+    images.forEach((img) => {
       const item = document.createElement('div');
       item.className = 'gallery-item';
       item.innerHTML = `<img src="${img.src}" alt="${img.alt || ''}" loading="lazy">`;
@@ -402,15 +351,7 @@
     if (e.target === lightbox) closeLightbox();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeLightbox();
-      // 也支持 Escape 关闭导航
-      const sideNav = document.getElementById('sideNav');
-      if (sideNav?.classList.contains('open')) {
-        sideNav.classList.remove('open');
-        document.getElementById('toggleIcon').textContent = '☰';
-      }
-    }
+    if (e.key === 'Escape') closeLightbox();
   });
 
   window.ShukkoGallery = { renderGallery, images: galleryImages };
