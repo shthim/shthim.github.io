@@ -1,59 +1,179 @@
 /**
- * 酒狐・Shukko — 个人主页交互脚本
- * 音乐播放器 · 画廊 · 导航交互
+ * 酒狐・Shukko — 个人主页（极简 SPA 版）
+ * 半圆导航 · 滑动切页 · 音乐播放器 · 画廊
  */
 
 'use strict';
 
 // =============================================
-// 1. 导航栏
+// 1. 页面导航 + 滑动切页
 // =============================================
 (() => {
-  const header = document.getElementById('header');
-  const toggle = document.getElementById('nav-toggle');
-  const menu = document.getElementById('nav-menu');
-  const navLinks = document.querySelectorAll('.nav-link');
+  const track = document.getElementById('pagesTrack');
+  const pages = document.querySelectorAll('.page');
+  const navBtns = document.querySelectorAll('.nav-btn');
+  const sideNav = document.getElementById('sideNav');
+  const navToggle = document.getElementById('navToggle');
+  const toggleIcon = document.getElementById('toggleIcon');
+  const dots = document.querySelectorAll('.dot');
+  const totalPages = pages.length;
 
-  // 移动端菜单切换
-  toggle?.addEventListener('click', () => {
-    toggle.classList.toggle('active');
-    menu.classList.toggle('show');
-  });
+  let currentPage = 0;
+  let isAnimating = false;
+  let touchStartX = 0;
+  let touchDeltaX = 0;
+  let isDragging = false;
 
-  // 点击导航链接后关闭菜单
-  navLinks.forEach(link => {
-    link.addEventListener('click', () => {
-      toggle?.classList.remove('active');
-      menu?.classList.remove('show');
+  // ---------- 切换到指定页 ----------
+  function goToPage(index) {
+    if (isAnimating) return;
+    if (index < 0) index = 0;
+    if (index >= totalPages) index = totalPages - 1;
+    if (index === currentPage) return;
+
+    isAnimating = true;
+    currentPage = index;
+
+    // 滑动轨道
+    track.style.transform = `translateX(-${currentPage * 100}%)`;
+
+    // 更新导航按钮状态
+    navBtns.forEach((btn, i) => {
+      btn.classList.toggle('active', i === currentPage);
     });
-  });
 
-  // 滚动监听：header shadow + 高亮当前 section
-  const sections = document.querySelectorAll('section[id]');
+    // 更新圆点指示器
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === currentPage);
+    });
 
-  const onScroll = () => {
-    const scrollY = window.scrollY;
+    // 自动关闭导航（小屏幕体验更好）
+    if (window.innerWidth <= 768) {
+      sideNav.classList.remove('open');
+      toggleIcon.textContent = '☰';
+    }
 
-    // header shadow
-    header?.classList.toggle('scrolled', scrollY > 60);
+    setTimeout(() => {
+      isAnimating = false;
+    }, 380); // 略大于 CSS transition 时长
+  }
 
-    // 活跃链接高亮
-    let current = '';
-    sections.forEach(section => {
-      const top = section.offsetTop - 120;
-      const bottom = top + section.offsetHeight;
-      if (scrollY >= top && scrollY < bottom) {
-        current = section.getAttribute('id');
+  // ---------- Nav 按钮点击 ----------
+  navBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const page = btn.dataset.page;
+      const target = document.getElementById(`page-${page}`);
+      if (target) {
+        const index = parseInt(target.dataset.index);
+        goToPage(index);
       }
     });
+  });
 
-    navLinks.forEach(link => {
-      link.classList.toggle('active', link.getAttribute('href') === `#${current}`);
+  // ---------- Nav 切换按钮 ----------
+  navToggle.addEventListener('click', () => {
+    sideNav.classList.toggle('open');
+    toggleIcon.textContent = sideNav.classList.contains('open') ? '✕' : '☰';
+  });
+
+  // 点击导航外部关闭
+  document.addEventListener('click', (e) => {
+    if (!sideNav.contains(e.target) && sideNav.classList.contains('open')) {
+      sideNav.classList.remove('open');
+      toggleIcon.textContent = '☰';
+    }
+  });
+
+  // ---------- 圆点指示器点击 ----------
+  dots.forEach((dot) => {
+    dot.addEventListener('click', () => {
+      const index = parseInt(dot.dataset.index);
+      goToPage(index);
     });
-  };
+  });
 
-  window.addEventListener('scroll', onScroll, { passive: true });
-  onScroll(); // 初始调用
+  // ---------- 键盘导航 ----------
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      goToPage(currentPage + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      goToPage(currentPage - 1);
+    }
+  });
+
+  // ---------- 触屏滑动 ----------
+  const wrapper = document.getElementById('pagesWrapper');
+
+  wrapper.addEventListener('touchstart', (e) => {
+    touchStartX = e.changedTouches[0].screenX;
+    isDragging = true;
+    touchDeltaX = 0;
+  }, { passive: true });
+
+  wrapper.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    // 不阻止默认，保持页面内滚动正常工作
+    touchDeltaX = e.changedTouches[0].screenX - touchStartX;
+  }, { passive: true });
+
+  wrapper.addEventListener('touchend', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+
+    // 阈值：滑动超过 60px 才翻页
+    if (Math.abs(touchDeltaX) > 60) {
+      if (touchDeltaX < 0) {
+        goToPage(currentPage + 1);  // 左滑 → 下一页
+      } else {
+        goToPage(currentPage - 1);  // 右滑 → 上一页
+      }
+    }
+  }, { passive: true });
+
+  // ---------- 鼠标滑动（拖拽翻页） ----------
+  let mouseStartX = 0;
+  let mouseDeltaX = 0;
+  let isMouseDown = false;
+
+  wrapper.addEventListener('mousedown', (e) => {
+    mouseStartX = e.screenX;
+    isMouseDown = true;
+    mouseDeltaX = 0;
+  });
+
+  wrapper.addEventListener('mousemove', (e) => {
+    if (!isMouseDown) return;
+    mouseDeltaX = e.screenX - mouseStartX;
+  });
+
+  wrapper.addEventListener('mouseup', (e) => {
+    if (!isMouseDown) return;
+    isMouseDown = false;
+
+    if (Math.abs(mouseDeltaX) > 80) {
+      if (mouseDeltaX < 0) {
+        goToPage(currentPage + 1);
+      } else {
+        goToPage(currentPage - 1);
+      }
+    }
+  });
+
+  wrapper.addEventListener('mouseleave', () => {
+    isMouseDown = false;
+  });
+
+  // ---------- 初始化 ----------
+  // 确保首页正确显示
+  track.style.transform = 'translateX(0)';
+  navBtns[0]?.classList.add('active');
+
+  // 暴露接口
+  window.ShukkoNavigator = { goToPage, getCurrentPage: () => currentPage };
+
+  console.log('🦊 酒狐小屋 — SPA 导航已启动');
 })();
 
 // =============================================
@@ -65,7 +185,6 @@
   let currentIndex = -1;
   let isPlaying = false;
 
-  // DOM 元素
   const playBtn = document.getElementById('play-btn');
   const prevBtn = document.getElementById('prev-btn');
   const nextBtn = document.getElementById('next-btn');
@@ -80,7 +199,6 @@
   const coverArt = document.getElementById('cover-art');
   const playlistEl = document.getElementById('playlist');
 
-  // ---------- 工具函数 ----------
   function formatTime(sec) {
     if (isNaN(sec) || !isFinite(sec)) return '0:00';
     const m = Math.floor(sec / 60);
@@ -88,12 +206,10 @@
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  // ---------- 播放列表管理 ----------
   function loadPlaylist(tracks) {
     playlist = tracks;
     renderPlaylist();
     if (playlist.length > 0) {
-      // 尝试恢复之前播放的曲目
       const saved = localStorage.getItem('shukko_last_track');
       const idx = saved ? playlist.findIndex(t => t.title === saved) : -1;
       loadTrack(idx >= 0 ? idx : 0);
@@ -122,25 +238,21 @@
     });
   }
 
-  // ---------- 加载/切换曲目 ----------
   function loadTrack(index) {
     if (index < 0 || index >= playlist.length) return;
     currentIndex = index;
     const track = playlist[currentIndex];
 
-    // 更新 UI
     trackTitle.textContent = track.title;
     trackArtist.textContent = track.artist || '未知艺术家';
     localStorage.setItem('shukko_last_track', track.title);
 
-    // 更新封面
     if (track.cover) {
       coverArt.innerHTML = `<img src="${track.cover}" alt="${track.title}" style="width:100%;height:100%;object-fit:cover;">`;
     } else {
       coverArt.innerHTML = `<div class="cover-placeholder">🎵</div>`;
     }
 
-    // 加载音频
     if (track.src) {
       audio.src = track.src;
       audio.load();
@@ -155,7 +267,6 @@
     updatePlayBtn();
   }
 
-  // ---------- 播放控制 ----------
   function togglePlay() {
     if (playlist.length === 0) return;
     if (!audio.src && currentIndex >= 0) {
@@ -200,7 +311,6 @@
     playBtn.textContent = isPlaying ? '⏸' : '▶';
   }
 
-  // ---------- 进度条 ----------
   function updateProgress() {
     if (!audio.duration) return;
     const pct = (audio.currentTime / audio.duration) * 100;
@@ -215,7 +325,6 @@
     audio.currentTime = pct * audio.duration;
   }
 
-  // ---------- 音量控制 ----------
   function setVolume(pct) {
     audio.volume = Math.max(0, Math.min(1, pct));
     volumeFill.style.width = (pct * 100) + '%';
@@ -228,18 +337,12 @@
     setVolume(pct);
   }
 
-  // ---------- 事件绑定 ----------
   playBtn?.addEventListener('click', togglePlay);
   prevBtn?.addEventListener('click', prevTrack);
   nextBtn?.addEventListener('click', nextTrack);
-
-  // 进度条
   progressBar?.addEventListener('click', seekProgress);
-
-  // 音量
   volumeBar?.addEventListener('click', seekVolume);
 
-  // Audio 事件
   audio.addEventListener('timeupdate', updateProgress);
   audio.addEventListener('loadedmetadata', () => {
     totalTimeEl.textContent = formatTime(audio.duration);
@@ -248,17 +351,13 @@
   audio.addEventListener('play', () => { isPlaying = true; updatePlayBtn(); });
   audio.addEventListener('pause', () => { isPlaying = false; updatePlayBtn(); });
 
-  // ---------- 初始化 ----------
-  // 恢复音量
   const savedVol = localStorage.getItem('shukko_volume');
   if (savedVol !== null) setVolume(parseFloat(savedVol));
   else setVolume(0.7);
 
-  // 暴露接口供外部设置播放列表
   window.ShukkoPlayer = { loadPlaylist, loadTrack, play: togglePlay };
 
-  // 从 data 属性加载播放列表（由 script.js 下方配置）
-  console.log('🎵 狐音小馆已就绪 — 在 script.js 中配置播放列表');
+  console.log('🎵 狐音小馆已就绪');
 })();
 
 // =============================================
@@ -270,17 +369,11 @@
   const lightboxImg = document.getElementById('lightbox-img');
   const lightboxClose = document.getElementById('lightbox-close');
 
-  // ---------- 配置：在这里添加你的图片 ----------
   const galleryImages = [];
 
-  // ---------- 渲染画廊 ----------
   function renderGallery(images) {
     if (!galleryGrid) return;
-    if (images.length === 0) {
-      // 已经默认有占位卡片了
-      return;
-    }
-    // 清除占位，渲染真实图片
+    if (images.length === 0) return;
     galleryGrid.innerHTML = '';
     images.forEach((img, idx) => {
       const item = document.createElement('div');
@@ -291,7 +384,6 @@
     });
   }
 
-  // ---------- Lightbox ----------
   function openLightbox(src) {
     if (!lightbox || !lightboxImg) return;
     lightboxImg.src = src;
@@ -310,45 +402,25 @@
     if (e.target === lightbox) closeLightbox();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'Escape') {
+      closeLightbox();
+      // 也支持 Escape 关闭导航
+      const sideNav = document.getElementById('sideNav');
+      if (sideNav?.classList.contains('open')) {
+        sideNav.classList.remove('open');
+        document.getElementById('toggleIcon').textContent = '☰';
+      }
+    }
   });
 
-  // ---------- 暴露接口 ----------
   window.ShukkoGallery = { renderGallery, images: galleryImages };
 })();
 
 // =============================================
-// 4. 淡入动画 (IntersectionObserver)
-// =============================================
-(() => {
-  if (!('IntersectionObserver' in window)) return;
-
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-          observer.unobserve(entry.target);
-        }
-      });
-    },
-    { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
-  );
-
-  // 观察卡片元素
-  document.querySelectorAll('.project-card, .gallery-item, .music-player, .section-header').forEach(el => {
-    el.classList.add('fade-in');
-    observer.observe(el);
-  });
-})();
-
-// =============================================
-// 5. 播放列表配置
-// 将你的 MP3 文件放在 music/ 目录下，然后在此配置
+// 4. 播放列表配置
 // =============================================
 (() => {
   const tracks = [
-    // 示例格式 — 取消注释即可使用：
     // { title: '曲名', artist: '艺术家', src: 'music/your-song.mp3', cover: 'assets/images/cover.jpg' },
   ];
 
@@ -358,14 +430,11 @@
 })();
 
 // =============================================
-// 6. 画廊配置
-// 将你的图片放在 assets/images/ 目录下，然后在此配置
+// 5. 画廊配置
 // =============================================
 (() => {
   const images = [
-    // 示例格式 — 取消注释即可使用：
     // { src: 'assets/images/photo1.jpg', alt: '描述' },
-    // { src: 'assets/images/photo2.jpg', alt: '描述' },
   ];
 
   if (images.length > 0 && window.ShukkoGallery) {
@@ -373,4 +442,4 @@
   }
 })();
 
-console.log('🦊 酒狐小窝已加载完成');
+console.log('🦊 酒狐小窝 — 全部就绪');
