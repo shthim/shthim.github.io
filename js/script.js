@@ -59,6 +59,7 @@
   navToggle.addEventListener('click', (e) => {
     e.stopPropagation();
     const isOpen = sideNav.classList.toggle('open');
+    navToggle.classList.toggle('open', isOpen);
     toggleIcon.textContent = isOpen ? '✕' : '☰';
   });
 
@@ -68,6 +69,7 @@
         !sideNav.contains(e.target) &&
         e.target !== navToggle) {
       sideNav.classList.remove('open');
+      navToggle.classList.remove('open');
       toggleIcon.textContent = '☰';
     }
   });
@@ -91,6 +93,7 @@
 
     if (e.key === 'Escape' && sideNav.classList.contains('open')) {
       sideNav.classList.remove('open');
+      navToggle.classList.remove('open');
       toggleIcon.textContent = '☰';
     }
   });
