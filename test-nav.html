@@ -53,14 +53,14 @@ body {
   transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ========== 圆弧按钮排列 ========== */
+/* ========== 圆弧按钮 ========== */
 .nav-btn {
   position: absolute; width: 46px; height: 46px;
   border: none; border-radius: 50%;
   background: transparent; color: #5C3A28;
   cursor: pointer; font-size: 1.15rem;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transform: scale(0.3) rotate(-45deg);
+  opacity: 0; transform: scale(0.3);
   transition: none;
 }
 .nav-btn .bg {
@@ -69,9 +69,18 @@ body {
   box-shadow: 0 2px 10px rgba(44,24,16,0.1);
   transition: all 0.25s;
 }
-.nav-btn .ico { position: relative; line-height: 1; }
+/* 按钮内容容器 — 用于反向旋转，保持正立 */
+.nav-btn .btn-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.nav-btn .ico { line-height: 1; }
 .nav-btn .nav-label {
-  position: absolute; left: calc(100% + 10px); top: 50%;
+  position: absolute; left: calc(100% + 6px); top: 50%;
   transform: translateY(-50%); white-space: nowrap;
   font-size: 0.82rem; font-weight: 600; color: #5C3A28;
   background: rgba(255,255,255,0.95);
@@ -91,7 +100,7 @@ body {
 /* 打开时按钮依次弹出 */
 .nav-wrap.open .nav-btn {
   opacity: 1;
-  transform: scale(1) rotate(0deg);
+  transform: scale(1);
   transition: all 0.40s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .nav-wrap.open .nav-btn:nth-child(1) { transition-delay: 0.06s; }
@@ -101,7 +110,8 @@ body {
 .nav-wrap.open .nav-btn:nth-child(5) { transition-delay: 0.30s; }
 .nav-wrap:not(.open) .nav-btn { transition: opacity 0.15s, transform 0.2s; }
 
-.nav-btn:hover .bg { background: rgba(196,30,58,0.12); transform: scale(1.15); }
+.nav-btn:hover .bg { background: rgba(196,30,58,0.12); }
+.nav-btn:hover .btn-inner { transform: scale(1.15); }
 .nav-btn.active .bg { background: #C41E3A; box-shadow: 0 4px 14px rgba(196,30,58,0.4); }
 .nav-btn.active .ico { color: #fff; }
 .nav-btn:hover .nav-label,
@@ -159,24 +169,39 @@ body {
 <div class="nav-wrap" id="navWrap">
   <div class="nav-circle" id="navCircle">
     <button class="nav-btn" data-page="0">
-      <span class="bg"></span><span class="ico">🦊</span>
-      <span class="nav-label">首页</span>
+      <span class="bg"></span>
+      <span class="btn-inner">
+        <span class="ico">🦊</span>
+        <span class="nav-label">首页</span>
+      </span>
     </button>
     <button class="nav-btn" data-page="1">
-      <span class="bg"></span><span class="ico">🎵</span>
-      <span class="nav-label">音乐</span>
+      <span class="bg"></span>
+      <span class="btn-inner">
+        <span class="ico">🎵</span>
+        <span class="nav-label">音乐</span>
+      </span>
     </button>
     <button class="nav-btn" data-page="2">
-      <span class="bg"></span><span class="ico">📦</span>
-      <span class="nav-label">项目</span>
+      <span class="bg"></span>
+      <span class="btn-inner">
+        <span class="ico">📦</span>
+        <span class="nav-label">项目</span>
+      </span>
     </button>
     <button class="nav-btn" data-page="3">
-      <span class="bg"></span><span class="ico">🖼️</span>
-      <span class="nav-label">画廊</span>
+      <span class="bg"></span>
+      <span class="btn-inner">
+        <span class="ico">🖼️</span>
+        <span class="nav-label">画廊</span>
+      </span>
     </button>
     <button class="nav-btn" data-page="4">
-      <span class="bg"></span><span class="ico">📬</span>
-      <span class="nav-label">联系</span>
+      <span class="bg"></span>
+      <span class="btn-inner">
+        <span class="ico">📬</span>
+        <span class="nav-label">联系</span>
+      </span>
     </button>
   </div>
 </div>
@@ -228,11 +253,11 @@ body {
 
 <script>
 // ========== 配置 ==========
-const BUTTON_ANGLES = [-65, -32.5, 0, 32.5, 65]; // 每个按钮的本地角度
+const BUTTON_ANGLES = [-65, -32.5, 0, 32.5, 65];
 const TOTAL = BUTTON_ANGLES.length;
 let currentPage = 0;
 let isOpen = false;
-let isAnimating = false; // 防止连点
+let isAnimating = false;
 
 // ========== DOM ==========
 const toggle = document.getElementById('toggleBtn');
@@ -241,27 +266,39 @@ const circle = document.getElementById('navCircle');
 const icon = document.getElementById('icon');
 const pages = document.querySelectorAll('.page');
 const navBtns = document.querySelectorAll('.nav-btn');
+const btnInners = document.querySelectorAll('.btn-inner');
 const pagesEl = document.getElementById('pages');
-const swipeHint = document.getElementById('swipeHint');
 
 // ========== 核心函数 ==========
 function getRotationForPage(index) {
   return -BUTTON_ANGLES[index];
 }
 
+function updateButtonCounterRotation(angle) {
+  // 动画补偿：按钮内容反向旋转，保持正立
+  const counter = -angle;
+  btnInners.forEach(el => {
+    el.style.transform = `rotate(${counter}deg)`;
+  });
+}
+
 function switchToPage(newIndex) {
   if (isAnimating) return;
-  if (newIndex < 0) newIndex = TOTAL - 1;   // 循环
-  if (newIndex >= TOTAL) newIndex = 0;       // 循环
+  if (newIndex < 0) newIndex = TOTAL - 1;
+  if (newIndex >= TOTAL) newIndex = 0;
   if (newIndex === currentPage) return;
 
   isAnimating = true;
-  
+
   const prevPage = currentPage;
   currentPage = newIndex;
+  const rotAngle = getRotationForPage(currentPage);
 
-  // 旋转圆 — 左轮上膛
-  circle.style.transform = `rotate(${getRotationForPage(currentPage)}deg)`;
+  // 旋转圆
+  circle.style.transform = `rotate(${rotAngle}deg)`;
+
+  // 按钮内容反向旋转补偿 → 保持正立
+  updateButtonCounterRotation(rotAngle);
 
   // 切换页面
   pages[prevPage].classList.remove('active');
@@ -272,10 +309,10 @@ function switchToPage(newIndex) {
     btn.classList.toggle('active', i === currentPage);
   });
 
-  // 更新页码指示
-  pages[newIndex].querySelector('.page-num').textContent = `${newIndex + 1} / ${TOTAL}`;
+  // 更新页码
+  const numEl = pages[newIndex].querySelector('.page-num');
+  if (numEl) numEl.textContent = `${newIndex + 1} / ${TOTAL}`;
 
-  // 动画锁
   setTimeout(() => { isAnimating = false; }, 600);
 }
 
@@ -284,17 +321,16 @@ function toggleNav() {
   wrap.classList.toggle('open', isOpen);
   toggle.classList.toggle('open', isOpen);
   icon.textContent = isOpen ? '✕' : '☰';
-  
+
   if (isOpen) {
-    // 打开时切换到当前页的正确旋转位置
-    circle.style.transform = `rotate(${getRotationForPage(currentPage)}deg)`;
+    const rotAngle = getRotationForPage(currentPage);
+    circle.style.transform = `rotate(${rotAngle}deg)`;
+    updateButtonCounterRotation(rotAngle);
   }
 }
 
-// ========== 初始状态 ==========
-// 标记首页为活跃
+// ========== 初始 ==========
 navBtns[0].classList.add('active');
-// 圆初始在关闭状态
 
 // ========== 触摸滑动 ==========
 let touchStartY = 0;
@@ -309,11 +345,10 @@ pagesEl.addEventListener('touchend', (e) => {
   const deltaY = touchStartY - e.changedTouches[0].clientY;
   const elapsed = Date.now() - touchStartTime;
   const velocity = Math.abs(deltaY) / Math.max(elapsed, 1);
-  
-  // 阈值：距离 > 40px 或 快速滑动
+
   if (Math.abs(deltaY) > 40 || (velocity > 0.5 && Math.abs(deltaY) > 15)) {
-    if (deltaY > 0) switchToPage(currentPage + 1); // 上滑 → 下一页
-    else switchToPage(currentPage - 1);              // 下滑 → 上一页
+    if (deltaY > 0) switchToPage(currentPage + 1);
+    else switchToPage(currentPage - 1);
   }
 }, { passive: true });
 
@@ -323,7 +358,6 @@ pagesEl.addEventListener('wheel', (e) => {
   e.preventDefault();
   if (wheelTimeout) return;
   wheelTimeout = setTimeout(() => { wheelTimeout = null; }, 600);
-  
   if (e.deltaY > 0) switchToPage(currentPage + 1);
   else switchToPage(currentPage - 1);
 }, { passive: false });
@@ -334,7 +368,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowDown') switchToPage(currentPage + 1);
 });
 
-// ========== 导航按钮点击 ==========
+// ========== 导航按钮 ==========
 navBtns.forEach((btn, i) => {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -343,13 +377,11 @@ navBtns.forEach((btn, i) => {
   });
 });
 
-// ========== 切换按钮 ==========
 toggle.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleNav();
 });
 
-// 点击外部关闭导航
 document.addEventListener('click', (e) => {
   if (isOpen && !wrap.contains(e.target) && e.target !== toggle) {
     toggleNav();
